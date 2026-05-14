@@ -93,9 +93,11 @@ export async function POST(req) {
     const kv = await getKV();
 
     // Eventos que CONCEDEM acesso
-    const grantStatuses = ['paid','approved','aprovado','succeeded','completed','complete','sale_approved','order_approved','purchase_approved','active'];
+    const grantStatuses = ['paid','pago','venda paga','venda_paga','sale_paid','approved','aprovado','succeeded','completed','complete','sale_approved','order_approved','purchase_approved','active'];
     // Eventos que REVOGAM acesso
-    const revokeStatuses = ['refunded','reembolso','chargeback','canceled','cancelled','cancelado','expired','disputed'];
+    const revokeStatuses = ['refunded','reembols','chargeback','chargedback','charged_back','canceled','cancelled','cancelado','expired','disputed'];
+    // OBS: 'venda recusada'/'refused' NÃO entra em nenhuma lista — é ignorado de propósito
+    //      (pagamento que não passou não revoga acesso de uma compra anterior).
 
     // ─── Detecção do que a compra inclui ───
     // upsell   → produto "5x + dieta"  → libera abas SEMANA + DIETA
