@@ -86,12 +86,38 @@ export function normEmail(e) {
   return String(e || '').trim().toLowerCase();
 }
 
+// ─── Expiração de acesso ───
+// Base (R$29,90) → acesso por 90 dias desde a compra.
+// Upsell (+R$19,90) → vitalício, nunca expira.
+export const ACCESS_DAYS_BASE = 90;
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+export function daysSince(ts) {
+  if (!ts) return 0;
+  const t = typeof ts === 'number' ? ts : new Date(ts).getTime();
+  if (!t || isNaN(t)) return 0;
+  return Math.floor((Date.now() - t) / MS_PER_DAY);
+}
+
+// Dias restantes de acesso. Upsell → null (vitalício). Base → nº de dias (pode ser negativo).
+export function accessDaysLeft(purchase) {
+  if (!purchase) return null;            // allowlist / sem compra → não expira
+  if (purchase.upsell) return null;      // vitalício
+  return ACCESS_DAYS_BASE - daysSince(purchase.purchasedAt);
+}
+
+export function isAccessExpired(purchase) {
+  const left = accessDaysLeft(purchase);
+  return left !== null && left <= 0;
+}
+
 // Auth gate — usa header Authorization: Bearer <token>
 // Verifica:
 //  1. token bate com session na KV
 //  2. token === user.currentToken (single session)
 //  3. user.status !== 'cancelled'
-// Retorna { email, token, user } se OK; { error, status } se falhou.
+//  4. acesso base (90 dias) não expirou — upsell é vitalício
+// Retorna { email, token, user, purchase } se OK; { error, status, code } se falhou.
 export async function requireAuth(req) {
   const auth = req.headers.get('authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
@@ -111,10 +137,19 @@ export async function requireAuth(req) {
 
   // Status check
   if (user.status === 'cancelled') {
-    return { error: 'Conta cancelada (reembolso/cancelamento). Fala no suporte.', status: 403 };
+    return { error: 'Conta cancelada (reembolso/cancelamento). Fala no suporte.', status: 403, code: 'CANCELLED' };
   }
 
-  return { email, token, user };
+  // Expiração de acesso (base 90 dias; upsell vitalício)
+  const purchase = await kv.get(`peitao:purchase:${email}`);
+  if (isAccessExpired(purchase)) {
+    return {
+      error: 'Teu acesso de 3 meses expirou. Libera o acesso vitalício pra continuar.',
+      status: 403, code: 'EXPIRED', email, user, purchase,
+    };
+  }
+
+  return { email, token, user, purchase };
 }
 
 // Substitui o currentToken do user — invalida sessão anterior
