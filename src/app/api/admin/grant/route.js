@@ -8,8 +8,9 @@ export const dynamic = 'force-dynamic';
  * Admin endpoint pra GH autorizar/revogar email manualmente.
  * Útil quando webhook Greenn ainda não funciona, ou pra contas de cortesia/teste.
  *
- * GET /api/admin/grant?email=foo@bar.com&secret=XXX → autoriza (só base)
- * GET /api/admin/grant?email=foo@bar.com&secret=XXX&upsell=1 → autoriza com upsell (semana+dieta)
+ * GET /api/admin/grant?email=foo@bar.com&secret=XXX → autoriza (só base, 90 dias)
+ * GET /api/admin/grant?email=foo@bar.com&secret=XXX&upsell=1 → + libera semana+dieta
+ * GET /api/admin/grant?email=foo@bar.com&secret=XXX&lifetime=1 → + acesso vitalício (zera os 90 dias)
  * GET /api/admin/grant?email=foo@bar.com&secret=XXX&action=revoke → revoga
  * GET /api/admin/grant?email=foo@bar.com&secret=XXX&action=check → inspeciona
  */
@@ -33,8 +34,8 @@ export async function GET(req) {
     return NextResponse.json({
       ok: true,
       email,
-      purchase: purchase ? { status: purchase.status, name: purchase.name, upsell: !!purchase.upsell, purchasedAt: purchase.purchasedAt, cancelledAt: purchase.cancelledAt } : null,
-      user: user ? { status: user.status || 'active', name: user.name, upsell: !!user.upsell, createdAt: user.createdAt, lastLogin: user.lastLogin, hasToken: !!user.currentToken } : null,
+      purchase: purchase ? { status: purchase.status, name: purchase.name, upsell: !!purchase.upsell, lifetime: !!purchase.lifetime, purchasedAt: purchase.purchasedAt, cancelledAt: purchase.cancelledAt } : null,
+      user: user ? { status: user.status || 'active', name: user.name, upsell: !!user.upsell, lifetime: !!user.lifetime, createdAt: user.createdAt, lastLogin: user.lastLogin, hasToken: !!user.currentToken } : null,
       hasAccess: !!purchase && (!user || user.status !== 'cancelled')
     });
   }
@@ -45,21 +46,26 @@ export async function GET(req) {
     return NextResponse.json({ ok: true, action: 'revoked', email });
   }
 
-  // grant — autoriza. upsell=1 libera semana+dieta também
-  const upsell = url.searchParams.get('upsell') === '1';
+  // grant — autoriza. upsell=1 libera semana+dieta · lifetime=1 zera a expiração
+  const wantUpsell = url.searchParams.get('upsell') === '1';
+  const wantLifetime = url.searchParams.get('lifetime') === '1';
   const existing = await kv.get(`peitao:purchase:${email}`);
+  const upsell = wantUpsell || !!(existing && existing.upsell);
+  const lifetime = wantLifetime || !!(existing && existing.lifetime);
   await kv.set(`peitao:purchase:${email}`, {
     email,
     name: url.searchParams.get('name') || existing?.name || null,
     status: 'manual_grant',
-    upsell: upsell || !!(existing && existing.upsell),
+    upsell,
+    lifetime,
     purchasedAt: existing?.purchasedAt || Date.now(),
   });
-  // Se já tem conta, sincroniza o flag
+  // Se já tem conta, sincroniza os flags
   const userRec = await kv.get(`peitao:user:${email}`);
   if (userRec) {
-    userRec.upsell = upsell || !!userRec.upsell;
+    userRec.upsell = upsell;
+    userRec.lifetime = lifetime;
     await kv.set(`peitao:user:${email}`, userRec);
   }
-  return NextResponse.json({ ok: true, action: 'granted', email, upsell: upsell || !!(existing && existing.upsell) });
+  return NextResponse.json({ ok: true, action: 'granted', email, upsell, lifetime });
 }

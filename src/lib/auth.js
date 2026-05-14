@@ -87,8 +87,10 @@ export function normEmail(e) {
 }
 
 // ─── Expiração de acesso ───
-// Base (R$29,90) → acesso por 90 dias desde a compra.
-// Upsell (+R$19,90) → vitalício, nunca expira.
+// Toda compra dá 90 dias de acesso desde a data da compra.
+// O ORDER BUMP "acesso vitalício" (purchase.lifetime) zera a expiração — e é
+// atrelado à CONTA, não ao produto. Comprar o "5x + dieta" (purchase.upsell)
+// libera conteúdo mas NÃO torna vitalício; só o bump faz isso.
 export const ACCESS_DAYS_BASE = 90;
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
@@ -99,10 +101,10 @@ export function daysSince(ts) {
   return Math.floor((Date.now() - t) / MS_PER_DAY);
 }
 
-// Dias restantes de acesso. Upsell → null (vitalício). Base → nº de dias (pode ser negativo).
+// Dias restantes de acesso. Vitalício → null. Senão → nº de dias (pode ser negativo).
 export function accessDaysLeft(purchase) {
   if (!purchase) return null;            // allowlist / sem compra → não expira
-  if (purchase.upsell) return null;      // vitalício
+  if (purchase.lifetime) return null;    // order bump vitalício zera a expiração
   return ACCESS_DAYS_BASE - daysSince(purchase.purchasedAt);
 }
 

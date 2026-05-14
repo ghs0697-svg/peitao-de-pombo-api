@@ -97,39 +97,72 @@ export async function POST(req) {
     // Eventos que REVOGAM acesso
     const revokeStatuses = ['refunded','reembolso','chargeback','canceled','cancelled','cancelado','expired','disputed'];
 
-    // Detecta se a compra inclui o ORDER BUMP (+R$19,90 → libera SEMANA + DIETA)
-    // Sinais (qualquer um basta): bump_id presente · valor total alto · nome da oferta
-    function detectUpsell(p) {
-      const sale = p.sale || p.data?.sale || {};
-      if (sale.bump_id || p.bump_id) return { upsell: true, motivo: 'bump_id' };
-      const total = Number(sale.total || sale.amount || p.amount || p.total || p.data?.amount || 0);
-      if (total >= 45) return { upsell: true, motivo: 'valor>=45 (' + total + ')' };
-      const offerName = String(p.offer?.name || p.oferta || sale.offer_name || p.product?.name || '').toLowerCase();
-      if (/upsell|completo|combo|semana|dieta|\+\s*treino/.test(offerName)) return { upsell: true, motivo: 'nome oferta' };
-      return { upsell: false, motivo: 'só base (total=' + total + ')' };
+    // ─── Detecção do que a compra inclui ───
+    // upsell   → produto "5x + dieta"  → libera abas SEMANA + DIETA
+    // lifetime → order bump "acesso vitalício" → zera os 90 dias de expiração (atrelado à CONTA)
+    // Detecta por NOME de produto/oferta/bump no payload + override por env (IDs exatos).
+    function collectNames(obj, acc = []) {
+      if (!obj || typeof obj !== 'object') return acc;
+      for (const k of Object.keys(obj)) {
+        const v = obj[k];
+        if (typeof v === 'string' && v && /name|nome|tit|offer|oferta|product|produto|bump|plan/i.test(k)) {
+          acc.push(v.toLowerCase());
+        } else if (v && typeof v === 'object') collectNames(v, acc);
+      }
+      return acc;
+    }
+    function collectIds(obj, acc = []) {
+      if (!obj || typeof obj !== 'object') return acc;
+      for (const k of Object.keys(obj)) {
+        const v = obj[k];
+        if ((typeof v === 'string' || typeof v === 'number') && /(product|produto|offer|oferta|bump|plan)_?id/i.test(k)) {
+          acc.push(String(v));
+        } else if (v && typeof v === 'object') collectIds(v, acc);
+      }
+      return acc;
+    }
+    function detectFlags(p) {
+      const nameStr = collectNames(p).join(' | ');
+      const ids = collectIds(p);
+      const env = (n) => (process.env[n] || '').split(',').map(s => s.trim()).filter(Boolean);
+      const ids5x = env('PEITAO_PRODUCT_5X_IDS');
+      const idsLife = env('PEITAO_LIFETIME_IDS');
+
+      const upsell =
+        ids.some(i => ids5x.includes(i)) ||
+        /\b5\s*x\b|cinco dias|resto do corpo|5x\s*\+\s*dieta|completo da semana/.test(nameStr);
+      const lifetime =
+        ids.some(i => idsLife.includes(i)) ||
+        /vital[ií]ci|lifetime|para sempre|pra sempre|acesso total/.test(nameStr);
+
+      return { upsell, lifetime, nameStr };
     }
 
     if (grantStatuses.some(s => status.includes(s))) {
-      const det = detectUpsell(payload);
+      const det = detectFlags(payload);
       const existing = await kv.get(`peitao:purchase:${email}`);
-      // NUNCA faz downgrade: se já tinha upsell, mantém. Aluno pode comprar base agora e upsell depois.
-      const upsell = det.upsell || (existing && existing.upsell) || false;
+      // NUNCA faz downgrade: flags só sobem. Aluno pode comprar base agora e upsell/vitalício depois.
+      const upsell   = det.upsell   || !!(existing && existing.upsell);
+      const lifetime = det.lifetime || !!(existing && existing.lifetime);
       const purchase = {
         email,
         name,
         status,
         upsell,
+        lifetime,
         purchasedAt: existing?.purchasedAt || Date.now(),
-        upsellAt: (det.upsell && !existing?.upsell) ? Date.now() : (existing?.upsellAt || null),
+        upsellAt:   (det.upsell   && !existing?.upsell)   ? Date.now() : (existing?.upsellAt   || null),
+        lifetimeAt: (det.lifetime && !existing?.lifetime) ? Date.now() : (existing?.lifetimeAt || null),
         raw: payload, // guarda raw pra debug
       };
       await kv.set(`peitao:purchase:${email}`, purchase);
-      console.log(`✅ peitao:purchase:${email} — upsell: ${upsell} (${det.motivo})`);
+      console.log(`✅ peitao:purchase:${email} — upsell:${upsell} lifetime:${lifetime} | nomes: ${det.nameStr}`);
 
-      // Se o user já existe, sincroniza o flag de upsell na conta dele
+      // Se o user já existe, sincroniza os flags na conta dele
       const userRec = await kv.get(`peitao:user:${email}`);
       if (userRec) {
         userRec.upsell = upsell;
+        userRec.lifetime = lifetime;
         await kv.set(`peitao:user:${email}`, userRec);
       }
 
@@ -150,7 +183,7 @@ export async function POST(req) {
         console.warn(`Sem phone no payload pra ${email} — WhatsApp não enviado`);
       }
 
-      return NextResponse.json({ ok: true, action: 'granted', email, upsell, phone: phone ? '***' : null });
+      return NextResponse.json({ ok: true, action: 'granted', email, upsell, lifetime, phone: phone ? '***' : null });
     }
 
     if (revokeStatuses.some(s => status.includes(s))) {
