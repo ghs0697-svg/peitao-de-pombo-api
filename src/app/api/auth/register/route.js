@@ -49,8 +49,9 @@ export async function POST(req) {
       }, { status: 409 });
     }
 
-    // 3. Cria conta — herda o flag de upsell da compra
+    // 3. Cria conta — herda os flags de upsell e lifetime da compra
     const upsell = !!(purchase && purchase.upsell);
+    const lifetime = !!(purchase && purchase.lifetime);
     const passwordHash = await hashPassword(password);
     const user = {
       email,
@@ -58,6 +59,7 @@ export async function POST(req) {
       name: purchase?.name || null,
       status: 'active',
       upsell,
+      lifetime,
       createdAt: Date.now(),
       lastLogin: Date.now(),
     };
@@ -65,7 +67,7 @@ export async function POST(req) {
 
     const token = await createSession(email);
     await rotateUserToken(email, token);
-    return jsonRes(req, { email, token, name: user.name, upsell, daysLeft: accessDaysLeft(purchase) });
+    return jsonRes(req, { email, token, name: user.name, upsell, lifetime, daysLeft: accessDaysLeft(purchase) });
   } catch (err) {
     console.error('register error:', err);
     return jsonRes(req, { error: 'Erro interno: ' + (err?.message || 'desconhecido') }, { status: 500 });

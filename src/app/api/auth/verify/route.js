@@ -13,12 +13,14 @@ export async function GET(req) {
   // requireAuth já trouxe a purchase e validou expiração
   const purchase = auth.purchase;
   const upsell = !!((purchase && purchase.upsell) || auth.user?.upsell);
+  const lifetime = !!((purchase && purchase.lifetime) || auth.user?.lifetime);
   const daysLeft = accessDaysLeft(purchase);
   return jsonRes(req, {
     ok: true,
     email: auth.email,
     status: auth.user?.status || 'active',
     upsell,
+    lifetime,
     daysLeft,
   });
 }

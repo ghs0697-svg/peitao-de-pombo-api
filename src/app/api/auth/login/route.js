@@ -45,11 +45,12 @@ export async function POST(req) {
     const token = await createSession(email);
     await rotateUserToken(email, token);
 
-    // Re-sincroniza upsell com a compra (caso tenha comprado o bump depois)
+    // Re-sincroniza upsell/lifetime com a compra (caso tenha comprado o bump depois)
     const upsell = !!((purchase && purchase.upsell) || user.upsell);
+    const lifetime = !!((purchase && purchase.lifetime) || user.lifetime);
     const daysLeft = accessDaysLeft(purchase);
 
-    return jsonRes(req, { email, token, name: user.name || null, upsell, daysLeft });
+    return jsonRes(req, { email, token, name: user.name || null, upsell, lifetime, daysLeft });
   } catch (err) {
     console.error('login error:', err);
     return jsonRes(req, { error: 'Erro interno: ' + (err?.message || 'desconhecido') }, { status: 500 });

@@ -56,6 +56,7 @@ export async function POST(req) {
 
     // 4. Grava senha nova — mantém dados, troca só o hash
     const upsell = !!((purchase && purchase.upsell) || existing?.upsell);
+    const lifetime = !!((purchase && purchase.lifetime) || existing?.lifetime);
     const passwordHash = await hashPassword(password);
     const user = {
       ...(existing || {}),
@@ -64,6 +65,7 @@ export async function POST(req) {
       name: existing?.name || purchase?.name || null,
       status: 'active',
       upsell,
+      lifetime,
       createdAt: existing?.createdAt || Date.now(),
       lastLogin: Date.now(),
     };
@@ -73,7 +75,7 @@ export async function POST(req) {
     const token = await createSession(email);
     await rotateUserToken(email, token);
 
-    return jsonRes(req, { email, token, name: user.name, upsell, daysLeft: accessDaysLeft(purchase) });
+    return jsonRes(req, { email, token, name: user.name, upsell, lifetime, daysLeft: accessDaysLeft(purchase) });
   } catch (err) {
     console.error('reset error:', err);
     return jsonRes(req, { error: 'Erro interno: ' + (err?.message || 'desconhecido') }, { status: 500 });
