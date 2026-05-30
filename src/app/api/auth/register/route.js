@@ -1,6 +1,6 @@
 import {
   preflight, jsonRes, getKV, createSession, hashPassword, normEmail, rotateUserToken,
-  isAccessExpired, accessDaysLeft
+  isAccessExpired, accessDaysLeft, daysSincePurchase
 } from '@/lib/auth';
 
 export const runtime = 'nodejs';
@@ -67,7 +67,7 @@ export async function POST(req) {
 
     const token = await createSession(email);
     await rotateUserToken(email, token);
-    return jsonRes(req, { email, token, name: user.name, upsell, lifetime, daysLeft: accessDaysLeft(purchase) });
+    return jsonRes(req, { email, token, name: user.name, upsell, lifetime, daysLeft: accessDaysLeft(purchase), daysSincePurchase: daysSincePurchase(purchase) });
   } catch (err) {
     console.error('register error:', err);
     return jsonRes(req, { error: 'Erro interno: ' + (err?.message || 'desconhecido') }, { status: 500 });

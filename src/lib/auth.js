@@ -113,6 +113,13 @@ export function isAccessExpired(purchase) {
   return left !== null && left <= 0;
 }
 
+// Dias passados desde a compra (pra controle de phase lock 2.0/3.0).
+// Null se não houver purchase (allowlist) — front trata como "tudo destravado".
+export function daysSincePurchase(purchase) {
+  if (!purchase || !purchase.purchasedAt) return null;
+  return daysSince(purchase.purchasedAt);
+}
+
 // Auth gate — usa header Authorization: Bearer <token>
 // Verifica:
 //  1. token bate com session na KV

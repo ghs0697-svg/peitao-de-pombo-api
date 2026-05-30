@@ -1,4 +1,4 @@
-import { preflight, jsonRes, requireAuth, accessDaysLeft } from '@/lib/auth';
+import { preflight, jsonRes, requireAuth, accessDaysLeft, daysSincePurchase } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,6 +15,7 @@ export async function GET(req) {
   const upsell = !!((purchase && purchase.upsell) || auth.user?.upsell);
   const lifetime = !!((purchase && purchase.lifetime) || auth.user?.lifetime);
   const daysLeft = accessDaysLeft(purchase);
+  const daysSince = daysSincePurchase(purchase);
   return jsonRes(req, {
     ok: true,
     email: auth.email,
@@ -22,5 +23,6 @@ export async function GET(req) {
     upsell,
     lifetime,
     daysLeft,
+    daysSincePurchase: daysSince,
   });
 }
