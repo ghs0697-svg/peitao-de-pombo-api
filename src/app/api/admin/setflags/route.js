@@ -18,10 +18,15 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(req) {
   const url = new URL(req.url);
-  const expected = process.env.HOTMART_WEBHOOK_SECRET || '';
   const provided = url.searchParams.get('secret') || '';
-  if (!expected || provided !== expected) {
-    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
+  const candidates = [
+    process.env.ADMIN_SECRET,
+    process.env.HOTMART_WEBHOOK_SECRET,
+    process.env.GREENN_WEBHOOK_SECRET,
+  ].filter(Boolean);
+  const valid = candidates.length > 0 && candidates.includes(provided);
+  if (!valid) {
+    return NextResponse.json({ ok: false, error: 'unauthorized', hint: candidates.length === 0 ? 'nenhum secret configurado no Vercel' : null }, { status: 401 });
   }
 
   const email = normEmail(url.searchParams.get('email') || '');
