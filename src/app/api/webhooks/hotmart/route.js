@@ -27,10 +27,18 @@ export const dynamic = 'force-dynamic';
 const PRODUCT_BASE      = ['0106022942', '0106022942Q'];
 const PRODUCT_5X        = ['X106025440', 'X106025440Q'];
 const PRODUCT_VITALICIO = ['H106024755', 'H106024755Q'];
+const PRODUCT_ERGO1     = ['P106025930', 'P106025930Q'];
+const PRODUCT_ERGO2     = ['N106025963', 'N106025963V'];
+const PRODUCT_PEPT      = ['I106025828', 'I106025828D'];
+const PRODUCT_COMBO     = ['J106027528', 'J106027528H'];
 
 // Códigos das ofertas (off=XXX no link) — fallback caso o ucode não case
 const OFFER_5X        = ['yh12bqml'];
 const OFFER_VITALICIO = ['hiziwk8x'];
+const OFFER_ERGO1     = ['ckeeojo0'];
+const OFFER_ERGO2     = ['89wqqryj'];
+const OFFER_PEPT      = ['aaz87zz2'];
+const OFFER_COMBO     = ['xw1mmse5'];
 
 const GRANT_EVENTS  = ['PURCHASE_APPROVED', 'PURCHASE_COMPLETE'];
 const REVOKE_EVENTS = ['PURCHASE_REFUNDED', 'PURCHASE_CHARGEBACK', 'PURCHASE_CANCELED', 'PURCHASE_EXPIRED', 'PURCHASE_PROTEST_CLOSED'];
@@ -81,14 +89,25 @@ export async function POST(req) {
                      || /5\s*x|5x\s*\+\s*dieta|semana.*dieta/.test(productName);
     const isVitalicio = matchUcode(PRODUCT_VITALICIO) || matchOffer(OFFER_VITALICIO)
                      || /vital[ií]ci/.test(productName);
+    const isCombo     = matchUcode(PRODUCT_COMBO)     || matchOffer(OFFER_COMBO)
+                     || /super\s*combo|combo.*3\s*ebooks?/.test(productName);
+    const isErgo1     = matchUcode(PRODUCT_ERGO1)     || matchOffer(OFFER_ERGO1)
+                     || /ergog[eê]nicos?.*(pt|parte).*1|parte\s*1.*ergog/.test(productName);
+    const isErgo2     = matchUcode(PRODUCT_ERGO2)     || matchOffer(OFFER_ERGO2)
+                     || /ergog[eê]nicos?.*(pt|parte).*2|parte\s*2.*ergog/.test(productName);
+    const isPept      = matchUcode(PRODUCT_PEPT)      || matchOffer(OFFER_PEPT)
+                     || /pept[ií]deos?/.test(productName);
 
     const kv = await getKV();
 
     if (GRANT_EVENTS.includes(event)) {
       const existing = await kv.get(`peitao:purchase:${email}`);
-      // NUNCA faz downgrade — flags só sobem
+      // NUNCA faz downgrade — flags só sobem. Combo libera os 3 ebooks de uma vez.
       const upsell   = is5X        || !!(existing && existing.upsell);
       const lifetime = isVitalicio || !!(existing && existing.lifetime);
+      const ergo1    = isErgo1 || isCombo || !!(existing && existing.ergo1);
+      const ergo2    = isErgo2 || isCombo || !!(existing && existing.ergo2);
+      const pept     = isPept  || isCombo || !!(existing && existing.pept);
       const purchaseRec = {
         email,
         name,
@@ -96,24 +115,33 @@ export async function POST(req) {
         source: 'hotmart',
         upsell,
         lifetime,
+        ergo1,
+        ergo2,
+        pept,
         purchasedAt: existing?.purchasedAt || Date.now(),
         upsellAt:   (is5X        && !existing?.upsell)   ? Date.now() : (existing?.upsellAt   || null),
         lifetimeAt: (isVitalicio && !existing?.lifetime) ? Date.now() : (existing?.lifetimeAt || null),
+        ergo1At:    ((isErgo1||isCombo) && !existing?.ergo1) ? Date.now() : (existing?.ergo1At || null),
+        ergo2At:    ((isErgo2||isCombo) && !existing?.ergo2) ? Date.now() : (existing?.ergo2At || null),
+        peptAt:     ((isPept ||isCombo) && !existing?.pept)  ? Date.now() : (existing?.peptAt  || null),
         lastEvent: event,
         raw: payload,
       };
       await kv.set(`peitao:purchase:${email}`, purchaseRec);
-      console.log(`✅ peitao:purchase:${email} (hotmart) — upsell:${upsell} lifetime:${lifetime} | ucode:${ucode} offer:${offerCode} nome:${productName}`);
+      console.log(`✅ peitao:purchase:${email} (hotmart) — upsell:${upsell} lifetime:${lifetime} ergo1:${ergo1} ergo2:${ergo2} pept:${pept} | ucode:${ucode} offer:${offerCode} nome:${productName}`);
 
       // Sincroniza flags no user (se já existe conta)
       const userRec = await kv.get(`peitao:user:${email}`);
       if (userRec) {
         userRec.upsell = upsell;
         userRec.lifetime = lifetime;
+        userRec.ergo1 = ergo1;
+        userRec.ergo2 = ergo2;
+        userRec.pept = pept;
         await kv.set(`peitao:user:${email}`, userRec);
       }
 
-      return NextResponse.json({ ok: true, action: 'granted', email, upsell, lifetime, source: 'hotmart' });
+      return NextResponse.json({ ok: true, action: 'granted', email, upsell, lifetime, ergo1, ergo2, pept, source: 'hotmart' });
     }
 
     if (REVOKE_EVENTS.includes(event)) {

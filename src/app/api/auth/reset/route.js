@@ -75,7 +75,12 @@ export async function POST(req) {
     const token = await createSession(email);
     await rotateUserToken(email, token);
 
-    return jsonRes(req, { email, token, name: user.name, upsell, lifetime, daysLeft: accessDaysLeft(purchase), daysSincePurchase: daysSincePurchase(purchase) });
+    const ebooks = {
+      ergo1: !!((purchase && purchase.ergo1) || existing?.ergo1),
+      ergo2: !!((purchase && purchase.ergo2) || existing?.ergo2),
+      pept:  !!((purchase && purchase.pept)  || existing?.pept),
+    };
+    return jsonRes(req, { email, token, name: user.name, upsell, lifetime, ebooks, daysLeft: accessDaysLeft(purchase), daysSincePurchase: daysSincePurchase(purchase) });
   } catch (err) {
     console.error('reset error:', err);
     return jsonRes(req, { error: 'Erro interno: ' + (err?.message || 'desconhecido') }, { status: 500 });

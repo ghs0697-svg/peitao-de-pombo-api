@@ -14,6 +14,11 @@ export async function GET(req) {
   const purchase = auth.purchase;
   const upsell = !!((purchase && purchase.upsell) || auth.user?.upsell);
   const lifetime = !!((purchase && purchase.lifetime) || auth.user?.lifetime);
+  const ebooks = {
+    ergo1: !!((purchase && purchase.ergo1) || auth.user?.ergo1),
+    ergo2: !!((purchase && purchase.ergo2) || auth.user?.ergo2),
+    pept:  !!((purchase && purchase.pept)  || auth.user?.pept),
+  };
   const daysLeft = accessDaysLeft(purchase);
   const daysSince = daysSincePurchase(purchase);
   return jsonRes(req, {
@@ -22,6 +27,7 @@ export async function GET(req) {
     status: auth.user?.status || 'active',
     upsell,
     lifetime,
+    ebooks,
     daysLeft,
     daysSincePurchase: daysSince,
   });

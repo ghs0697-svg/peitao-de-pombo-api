@@ -48,10 +48,15 @@ export async function POST(req) {
     // Re-sincroniza upsell/lifetime com a compra (caso tenha comprado o bump depois)
     const upsell = !!((purchase && purchase.upsell) || user.upsell);
     const lifetime = !!((purchase && purchase.lifetime) || user.lifetime);
+    const ebooks = {
+      ergo1: !!((purchase && purchase.ergo1) || user.ergo1),
+      ergo2: !!((purchase && purchase.ergo2) || user.ergo2),
+      pept:  !!((purchase && purchase.pept)  || user.pept),
+    };
     const daysLeft = accessDaysLeft(purchase);
     const daysSince = daysSincePurchase(purchase);
 
-    return jsonRes(req, { email, token, name: user.name || null, upsell, lifetime, daysLeft, daysSincePurchase: daysSince });
+    return jsonRes(req, { email, token, name: user.name || null, upsell, lifetime, ebooks, daysLeft, daysSincePurchase: daysSince });
   } catch (err) {
     console.error('login error:', err);
     return jsonRes(req, { error: 'Erro interno: ' + (err?.message || 'desconhecido') }, { status: 500 });
