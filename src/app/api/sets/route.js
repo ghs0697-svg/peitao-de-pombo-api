@@ -28,13 +28,15 @@ const MAX_SETS = 12;
 const MAX_ENTRIES_BULK = 400;
 const LOG_MAX = 3000;   // teto do log por aluno (aparados os mais antigos)
 
+// Campos aceitos por item: séries de carga (kg/pl/reps) e medição da Régua (cm/lado/frente)
+const ITEM_FIELDS = ['kg', 'pl', 'reps', 'cm', 'lado', 'frente'];
 function cleanSets(arr) {
   if (!Array.isArray(arr)) return null;
-  return arr.slice(0, MAX_SETS).map(s => ({
-    kg: String((s && s.kg) || '').slice(0, 8),
-    pl: String((s && s.pl) || '').slice(0, 8),
-    reps: String((s && s.reps) || '').slice(0, 8),
-  }));
+  return arr.slice(0, MAX_SETS).map(s => {
+    const o = {};
+    for (const f of ITEM_FIELDS) o[f] = String((s && s[f]) || '').slice(0, 8);
+    return o;
+  });
 }
 function validKey(k) {
   return typeof k === 'string' && k.length > 0 && k.length <= MAX_KEY_LEN && /^[\w.\-]+$/.test(k);
