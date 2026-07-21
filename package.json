@@ -10,6 +10,7 @@
   "dependencies": {
     "@vercel/kv": "^3.0.0",
     "bcryptjs": "^2.4.3",
+    "googleapis": "^173.0.0",
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4"
