@@ -16,13 +16,14 @@ export const maxDuration = 60;
 const MAX_AGE_DAYS = 120; // 4 meses (fecha o ciclo de 3 meses + folga)
 
 function getDrive() {
-  const raw = process.env.GOOGLE_CREDS_JSON;
+  const cid = process.env.GDRIVE_CLIENT_ID;
+  const csec = process.env.GDRIVE_CLIENT_SECRET;
+  const rtok = process.env.GDRIVE_REFRESH_TOKEN;
   const root = process.env.PEITAO_FOTOS_FOLDER_ID;
-  if (!raw || !root) return null;
-  let creds;
-  try { creds = JSON.parse(raw); } catch (e) { return null; }
-  const auth = new google.auth.GoogleAuth({ credentials: creds, scopes: ['https://www.googleapis.com/auth/drive'] });
-  return { drive: google.drive({ version: 'v3', auth }), root };
+  if (!cid || !csec || !rtok || !root) return null;
+  const oauth2 = new google.auth.OAuth2(cid, csec);
+  oauth2.setCredentials({ refresh_token: rtok });
+  return { drive: google.drive({ version: 'v3', auth: oauth2 }), root };
 }
 
 function parseBR(s) {

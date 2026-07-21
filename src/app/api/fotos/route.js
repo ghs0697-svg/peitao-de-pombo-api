@@ -22,13 +22,15 @@ export const maxDuration = 30;
 const ANGLES = { frente: 'frente', costas: 'costas', ladoD: 'ladoD', ladoE: 'ladoE' };
 
 function getDrive() {
-  const raw = process.env.GOOGLE_CREDS_JSON;
+  const cid = process.env.GDRIVE_CLIENT_ID;
+  const csec = process.env.GDRIVE_CLIENT_SECRET;
+  const rtok = process.env.GDRIVE_REFRESH_TOKEN;
   const root = process.env.PEITAO_FOTOS_FOLDER_ID;
-  if (!raw || !root) return null;
-  let creds;
-  try { creds = JSON.parse(raw); } catch (e) { return null; }
-  const auth = new google.auth.GoogleAuth({ credentials: creds, scopes: ['https://www.googleapis.com/auth/drive'] });
-  return { drive: google.drive({ version: 'v3', auth }), root };
+  if (!cid || !csec || !rtok || !root) return null;
+  // OAuth do próprio GH (drive.file): sobe pra Drive dele, sem o limite de cota de service account.
+  const oauth2 = new google.auth.OAuth2(cid, csec);
+  oauth2.setCredentials({ refresh_token: rtok });
+  return { drive: google.drive({ version: 'v3', auth: oauth2 }), root };
 }
 
 async function findOrCreateFolder(drive, name, parentId) {
